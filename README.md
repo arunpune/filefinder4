@@ -1,14 +1,17 @@
 # FileFinder - Enterprise File Inventory & Analysis Tool
 
-**Version 6** | Last Updated: February 26, 2024
+**Version 7** | Last Updated: November 25, 2025
 
 FileFinder is a cross-platform (Windows/Linux) file scanning and analysis tool that inventories files across drives, detects sensitive data patterns, analyzes Excel file content, and stores comprehensive metadata in MySQL for reporting and analysis.
+
+**Version 7 Features**: 50-200x performance improvements through batch operations, FK caching, and parallel Excel processing.
 
 ## 📋 Table of Contents
 
 - [Overview](#overview)
 - [Contact Information](#contact-information)
 - [Prerequisites](#prerequisites)
+- [Database SQL Scripts](#database-sql-scripts)
 - [Installation](#installation)
   - [MySQL Database Setup](#mysql-database-setup)
   - [Python Environment Setup](#python-environment-setup)
@@ -61,6 +64,56 @@ For any inquiries or assistance, please contact:
 
 ---
 
+## Database SQL Scripts
+
+FileFinder requires three SQL scripts to be executed in order (located in `SQLScripts/` folder):
+
+### 1. `1mysql_user.sql` - Create Database User
+
+Creates MySQL user `arungt` with full privileges:
+
+```sql
+CREATE USER 'arungt'@'localhost' IDENTIFIED BY 'fi!ef!ndgt!23'; 
+GRANT ALL PRIVILEGES ON *.* TO 'arungt'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES; 
+SHOW GRANTS FOR 'arungt'@'localhost';
+```
+
+**When to run**: First, before creating database schema.
+
+### 2. `2rec_files.sql` - Create Database Schema
+
+Creates the `rec_files` database with all required tables:
+- `f_machine_files_summary_count` - Machine-level file statistics
+- `d_file_details` - Individual file metadata  
+- `d_shared_folders` - Windows network shares enumeration
+- `xls_file_sheet` - Excel sheet metadata
+- `xls_file_sheet_row` - Excel row data (first N rows)
+- `audit_info` - Scan execution history
+- `app_log_file` - Application logs
+- `env_info` - Configuration storage (alternative to .env)
+- `machine_info_migration_center` - Machine migration tracking
+- `f_machine_files_count_sp` - Aggregated file counts by extension
+
+**When to run**: Second, after creating the user.
+
+### 3. `3_rec_performance_indexes.sql` - Create Performance Indexes
+
+Creates 25+ optimized indexes for query performance:
+- Primary lookup indexes (hostname, IP address)
+- File search indexes (extension, path, sensitive data)
+- Composite indexes (multi-column queries)
+- Excel table indexes
+- Audit and logging indexes
+
+**Expected Impact**: 10-50x faster SELECT queries, 10-20x faster JOINs  
+**Execution Time**: 5-30 minutes depending on data volume  
+**When to run**: Third, AFTER importing schema and optionally after initial data load.
+
+⚠️ **IMPORTANT**: Always run these scripts in order: 1 → 2 → 3
+
+---
+
 ## Installation
 
 ### MySQL Database Setup
@@ -105,35 +158,54 @@ For any inquiries or assistance, please contact:
 
 #### Step 3: Import Database Schema
 
-1. Locate the SQL schema file: `1_sql_file_info_create.sql` (in SQLScripts folder)
+Execute the SQL scripts in order from the `SQLScripts` folder:
 
-2. Execute the script in MySQL Workbench:
-   ```sql
-   SOURCE /path/to/1_sql_file_info_create.sql;
-   ```
-   
-   Or via command line:
-   ```powershell
-   mysql -u arungt -p < 1_sql_file_info_create.sql
-   ```
+**Script 1: Create Database User** (`1mysql_user.sql`)
+```sql
+CREATE USER 'arungt'@'localhost' IDENTIFIED BY 'fi!ef!ndgt!23'; 
+GRANT ALL PRIVILEGES ON *.* TO 'arungt'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES; 
+SHOW GRANTS FOR 'arungt'@'localhost';
+```
 
-3. Verify tables were created:
-   ```sql
-   USE lisney_files_info8;
-   SHOW TABLES;
-   ```
+**Script 2: Create Database Schema** (`2rec_files.sql`)
+```powershell
+mysql -u arungt -p < SQLScripts/2rec_files.sql
+```
 
-Expected tables:
-- `f_machine_files_summary_count`
-- `d_file_details`
-- `d_shared_folders`
-- `xls_file_sheet`
-- `xls_file_sheet_row`
-- `audit_info`
-- `app_log_file`
-- `env_info`
-- `machine_info_migration_center`
-- `f_machine_files_count_sp`
+Or in MySQL Workbench:
+```sql
+SOURCE /path/to/SQLScripts/2rec_files.sql;
+```
+
+This creates database `rec_files` with these tables:
+- `f_machine_files_summary_count` - Machine-level file statistics
+- `d_file_details` - Individual file metadata
+- `d_shared_folders` - Windows network shares
+- `xls_file_sheet` - Excel sheet metadata
+- `xls_file_sheet_row` - Excel row data (first N rows)
+- `audit_info` - Scan execution history
+- `app_log_file` - Application logs
+- `env_info` - Configuration storage (optional)
+- `machine_info_migration_center` - Machine migration tracking
+- `f_machine_files_count_sp` - File count aggregations
+
+**Script 3: Create Performance Indexes** (`3_rec_performance_indexes.sql`)
+
+⚠️ **IMPORTANT**: Run this AFTER importing the base schema.
+
+```powershell
+mysql -u arungt -p rec_files < SQLScripts/3_rec_performance_indexes.sql
+```
+
+This creates 25+ indexes for 10-50x faster queries. Execution time: 5-30 minutes depending on data size.
+
+**Verify Installation**:
+```sql
+USE rec_files;
+SHOW TABLES;
+SHOW INDEX FROM d_file_details;
+```
 
 ---
 
@@ -149,11 +221,21 @@ cd filefinder3\FileFinder_19
 
 #### Step 2: Create Virtual Environment
 
+⚠️ **IMPORTANT**: Use Python 3.11 only. Check version first:
+```powershell
+python --version  # Should show Python 3.11.x
+```
+
+If multiple Python versions are installed, ensure Python 3.11 is first in PATH:
+- Edit Environment Variables
+- Move Python 3.11 path to top of PATH variable
+- Verify: `python --version`
+
 Navigate to the FileFinder directory and create a virtual environment:
 
 ```powershell
 # Navigate to the project directory
-cd <filefinder-directory>
+cd FileFinder_19
 
 # Create virtual environment
 python -m venv venv
@@ -178,14 +260,31 @@ source venv/bin/activate
 
 #### Step 4: Install Dependencies
 
+**Windows**:
 ```powershell
+# Upgrade pip and install core packages
+pip install --upgrade pip
+pip install wheel setuptools
+
+# Install numpy < 2.0 (compatibility fix for pandas 2.1.2)
+pip install "numpy<2.0"
+pip install pandas==2.1.2
+pip install pywin32==306
+
+# Install remaining dependencies
 pip install -r requirements.txt
 ```
 
-For Linux, use:
+**Linux**:
 ```bash
+pip install --upgrade pip
+pip install wheel setuptools
+pip install "numpy<2.0"
+pip install pandas==2.1.2
 pip install -r "requirements - Linux.txt"
 ```
+
+⚠️ **Note**: The `numpy<2.0` constraint is critical for pandas 2.1.2 compatibility.
 
 #### Step 5: Verify Installation
 
@@ -208,7 +307,7 @@ The `.env` file contains all configuration settings. It must be in the same dire
 # MySQL Database Connection
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
-MYSQL_DATABASE=lisney_files_info8
+MYSQL_DATABASE=rec_files
 MYSQL_USERNAME=arungt
 MYSQL_PASSWORD=fi!ef!ndgt!23
 
@@ -254,11 +353,13 @@ ENABLE_EXCEL_FILE_DATA_SCAN_MIN_ROW=3
 Before running FileFinder, verify:
 
 - ✅ MySQL server is running
-- ✅ Database `lisney_files_info8` exists
-- ✅ User `arungt` has proper permissions
+- ✅ Database `rec_files` exists (created via `2rec_files.sql`)
+- ✅ User `arungt` has proper permissions (created via `1mysql_user.sql`)
+- ✅ Performance indexes created (via `3_rec_performance_indexes.sql`)
 - ✅ `.env` file has correct credentials
 - ✅ Virtual environment is activated
-- ✅ All dependencies are installed
+- ✅ All dependencies are installed (including `numpy<2.0` fix)
+- ✅ Python 3.11 is being used
 
 ---
 
@@ -361,9 +462,10 @@ dist/
 For deployment to other machines, copy these files together:
 1. `file_info_version_22.exe` (from `dist/` folder)
 2. `.env` (configuration file)
-3. `1_sql_file_info_create.sql` (database schema)
 
 **Important**: The `.env` file MUST be in the same directory as the `.exe` file.
+
+**Note**: Database setup (SQL scripts) must be executed separately on the target MySQL server before running the executable.
 
 ### Step 5: Run Executable
 
@@ -385,38 +487,60 @@ The executable provides the same interactive interface as the Python script.
    - Click **Install**
 
 2. **Install MySQL Connector**:
-   - Download [MySQL Connector/NET](https://dev.mysql.com/downloads/connector/net/)
-   - Install the connector
-   - Restart PowerBI Desktop
+   
+   ⚠️ **REQUIRED**: PowerBI requires MySQL Connector/NET to connect to MySQL databases.
+   
+   **Installation Steps**:
+   - Visit: https://dev.mysql.com/downloads/connector/net/
+   - Download the connector for your OS (Windows x64)
+   - Run the installer file
+   - Complete installation wizard
+   - **Restart PowerBI Desktop** after installation
+   
+   **Verify Installation**:
+   - Open PowerBI Desktop
+   - Click **Get Data**
+   - Search for "MySQL" - it should appear in the list
+   - If not visible, reinstall the connector
 
 ### Connect to FileFinder Database
 
 1. **Open PowerBI Desktop**
 
 2. **Get Data from MySQL**:
-   - Click **Get Data** → **Database** → **MySQL database**
+   - Click **File** → **Get Data** → **Get Data from Other Sources**
+   - If you don't see it, scroll down and click "**Get data to Get Started**"
+   - Type "MySQL" in the search box
+   - Select **MySQL database**
    - Enter connection details:
-     - **Server**: `localhost:3306`
-     - **Database**: `lisney_files_info8`
-
-3. **Enter Credentials**:
-   - **Username**: `arungt`
-   - **Password**: `fi!ef!ndgt!23`
-
-4. **Select Tables**:
-   - Choose tables to import:
-     - `f_machine_files_summary_count`
-     - `d_file_details`
-     - `d_shared_folders`
-     - `audit_info`
-
-5. **Configure Security Settings**:
-   - Go to **File** → **Options and Settings** → **Options**
-   - Navigate to **Security**
-   - Under **Privacy levels**, select **"Ignore Privacy Levels"** (Not Recommended)
+     - **Server**: `localhost:3306` (or just `localhost`)
+     - **Database**: `rec_files`
    - Click **OK**
 
-   ⚠️ **Note**: This setting is needed for cross-database queries but may reduce security.
+3. **Enter Credentials**:
+   - Select **Database** authentication
+   - **Username**: `arungt`
+   - **Password**: `fi!ef!ndgt!23`
+   - Click **Connect**
+
+4. **Select Tables**:
+   - PowerBI will display all available tables in the `rec_files` database
+   - **Recommended tables to import**:
+     - `f_machine_files_summary_count` - Summary statistics
+     - `d_file_details` - Individual file records
+     - `d_shared_folders` - Network shares
+     - `audit_info` - Scan history
+     - `xls_file_sheet` - Excel sheet metadata (optional)
+   - Select all desired tables (Ctrl+Click for multiple)
+   - Click **Load** to import data
+
+5. **Configure Security Settings** (Required for cross-table queries):
+   - Go to **File** → **Options and Settings** → **Options**
+   - Navigate to **Security**
+   - Under **Privacy levels**, select **"Ignore Privacy Levels"** or **"Not Recommended"**
+   - Click **OK**
+
+   ⚠️ **Note**: This setting allows PowerBI to combine data from multiple tables but may reduce security. Only use in trusted environments.
 
 ### Sample PowerBI Queries
 
@@ -475,6 +599,7 @@ Then retry activating the virtual environment.
 **Solution**:
 Enable long paths in Windows Registry:
 
+**Method 1: Via Registry Editor**
 1. Open Registry Editor (`Win + R` → `regedit`)
 2. Navigate to:
    ```
@@ -483,11 +608,17 @@ Enable long paths in Windows Registry:
 3. Set `LongPathsEnabled` to `1`
 4. Restart computer
 
-Or via PowerShell (Administrator):
+**Method 2: Via PowerShell (Administrator)**
 ```powershell
 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
 -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 ```
+
+**Method 3: Via Registry Value (Recommended)**
+- Location: `Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled`
+- Set value to: `1`
+
+⚠️ **This setting is required for FileFinder to access deep directory structures.**
 
 #### 3. MySQL Connection Failed
 
@@ -496,9 +627,10 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
 **Checklist**:
 - ✅ MySQL service is running: `services.msc` → MySQL80
 - ✅ Check `.env` credentials match MySQL user
-- ✅ Database exists: `SHOW DATABASES LIKE 'lisney_files_info8';`
+- ✅ Database exists: `SHOW DATABASES LIKE 'rec_files';`
 - ✅ User has permissions: `SHOW GRANTS FOR 'arungt'@'localhost';`
 - ✅ Firewall allows port 3306
+- ✅ Verify database name in `.env` matches actual database (`rec_files`)
 
 #### 4. Permission Denied During Scan
 

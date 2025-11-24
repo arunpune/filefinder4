@@ -1,0 +1,165 @@
+﻿GT File Finder Setup info
+
+
+
+
+
+GT File Finder Setup	2
+Contact info	2
+Check the python version	2
+Use only python version 3.11	2
+Check the python version	2
+python –version	2
+check the environment variables and move the python version to the top and check the python version	2
+Setting up MySQL Data	3
+Mysql: root,arun	3
+Connecting MySQL with ip address	3
+Mysql Scripts – check the folder (\filefinder4\SQLScripts)	4
+1mysql_user.sql	4
+2rec_files.sql – create Database – rec_files	4
+To Set up the DB Name: rec_files and Schema in MySQL.	4
+3_rec_performance_indexes.sql	5
+Setting up Code in VSCode	5
+Check correct values in .env	5
+Setting up a Virtual Environment and Running the Code	6
+How to Create a .exe file	7
+Install PowerBI	8
+
+
+
+GT File Finder Setup
+Version 9
+Date: 25 November 2025
+
+Contact info 
+
+For any inquiries or assistance, please contact:
+
+Email : arunkumar.nair@canspirit.ai
+
+Check the python version
+Use only python version 3.11
+Check the python version
+python –version
+check the environment variables and move the python version to the top and check the python version 
+
+# After creating fresh venv and activating:
+pip install --upgrade pip
+pip install wheel setuptools
+pip install "numpy<2.0"
+pip install pandas==2.1.2
+pip install pywin32==306
+pip install -r requirements.txt
+Setting up MySQL Data
+
+Mysql: root,arun
+Connecting MySQL with ip address
+
+To set up MySQL data, follow these steps:
+
+1. Navigate to `C:\ProgramData\MySQL\MySQL Server 8.0`.
+2. Make the `my.ini` file writable and add the following line:
+   ```
+   bind-address=0.0.0.0
+   ```
+   This allows MySQL to accept connections from any IP address.
+
+C:\ProgramData\MySQL\MySQL Server 8.0
+
+
+Mysql Scripts – check the folder (\filefinder4\SQLScripts)
+1mysql_user.sql
+First run This script creates a user `arungt` with the password `fi!ef!ndgt!23` and grants it full privileges on all databases.
+
+CREATE USER 'arungt'@'localhost' IDENTIFIED BY 'fi!ef!ndgt!23'; 
+GRANT ALL PRIVILEGES ON *.* TO 'arungt'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES; 
+SHOW GRANTS FOR 'arungt'@'localhost';
+2rec_files.sql – create Database – rec_files
+In MySQL Workbench, execute the provided MySQL script
+2rec_files.sql
+To Set up the DB Name: rec_files and Schema in MySQL.
+
+
+3_rec_performance_indexes.sql
+Execute the performance index on the database
+
+Setting up Code in VSCode
+
+Check correct values in .env
+
+MYSQL_HOST=localhost
+MYSQL_DATABASE=lisney_files_info8
+MYSQL_USERNAME=arungt
+MYSQL_PASSWORD=fi!ef!ndgt!23
+FILE_EXTENSIONS=.xlsx,.xls
+N_DAYS=1
+SENSITIVE_PATTERNS=password,creditcard
+MIN_ROW=3
+Setting up a Virtual Environment and Running the Code
+
+1. Navigate to the directory where the file finder code is located (`<filefinder directory>`).
+2. Create a virtual environment using Python's `venv` module:  
+   
+       python -m venv venv
+   
+3.  Activate the virtual environment:
+   
+      .\venv\Scripts\activate
+   
+4. Install the required Python packages listed in `requirements.txt`:
+  
+      pip install -r requirements.txt
+   
+5.  Run the Python script `file_info_version_22.py`:
+   
+       python file_info_version_22.py   
+ 
+ $ cd <filefinder directory>
+ $  python -m venv venv 
+$ .\venv\Scripts\activate
+$ pip install -r requirements.txt
+$ python file_info_version_22.py
+ 
+
+If the virtual machine does not run - 
+If you encounter issues with running the virtual machine, ensure that the execution policy is set to unrestricted and the `LongPathsEnabled` registry key is set to `1`.
+$ Set-ExecutionPolicy Unrestricted -Force
+Set below value to 1 - 
+$Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled
+How to Create a .exe file
+To create an executable (.exe) file for the file finder application, follow these steps:
+
+1. Activate the virtual Directory venv and then run the installer command
+
+2. Run the following command in the terminal:
+   
+   pyinstaller --onefile <script_name>.py
+  
+3.    Replace `<script_name>` with the name of your Python script (`file_info_version_22`).
+4. After successful execution, three files will be generated in the folder:
+   - `.env`
+   - `1_sql_file_info_create.sql`
+   - `file_info_version_XYZ.exe`
+5. Ensure that both the `.env` file and the executable file (`file_info_version_22.exe`) are in the same folder.
+6. Run the `file_info_version_22.exe` file and follow the instructions displayed on the Command Line interface.
+7. Wait for the search process to be completed.
+
+Install PowerBI
+
+To utilize PowerBI with the file finder application, follow these steps:
+
+1. Install PowerBI from the Microsoft Store.
+2. Install the PowerBI MySQL connector to establish a connection with the MySQL database.
+Steps to Install the Connector:
+• Open this link: https://dev.mysql.com/downloads/connector/net/
+• Download the Connector for your OS.
+• Open the installer file and finish the steps.
+• Now, refresh PowerBI.
+3. Click on File -> Get Data -> Get Data from Other Sources. (if you cant see it, scroll down and click “Get data to Get Started”). Type in the server name (Usually localhost:3306), the database name (lisney_files_info8), proceed, then type in the username (arungt) and password (fi!ef!ndgt!23) of the database. Proceed. The tables in the database will be shown, select all tables then load the data.
+
+4. When opening a file in PowerBI, select `File` > `Security` > `Not Recommended` for enhanced security measures. 
+
+
+
+
