@@ -37,7 +37,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- (Commented out by default for first-time runs)
 
 -- Drop indexes from f_machine_files_summary_count
-DROP INDEX idx_hostname ON f_machine_files_summary_count;
+DROP INDEX idx_Machine_Name ON f_machine_files_summary_count;
 DROP INDEX idx_ip_address ON f_machine_files_summary_count;
 
 -- Drop indexes from d_file_details
@@ -49,7 +49,7 @@ DROP INDEX idx_modified_date ON d_file_details;
 DROP INDEX idx_file_owner ON d_file_details;
 DROP INDEX idx_file_search ON d_file_details;
 DROP INDEX idx_fk_extension ON d_file_details;
-DROP INDEX idx_hostname_path ON d_file_details;
+DROP INDEX idx_Machine_Name_path ON d_file_details;
 
 -- Drop indexes from xls_file_sheet
 DROP INDEX idx_sheet_fk ON xls_file_sheet;
@@ -63,18 +63,18 @@ DROP INDEX idx_row_number ON xls_file_sheet_row;
 -- Drop indexes from d_shared_folders
 DROP INDEX idx_shared_fk ON d_shared_folders;
 DROP INDEX idx_shared_name ON d_shared_folders;
-DROP INDEX idx_shared_hostname ON d_shared_folders;
+DROP INDEX idx_shared_Machine_Name ON d_shared_folders;
 
 -- Drop indexes from audit_info
 DROP INDEX idx_audit_fk ON audit_info;
-DROP INDEX idx_audit_hostname ON audit_info;
+DROP INDEX idx_audit_ip ON audit_info;
 DROP INDEX idx_audit_time ON audit_info;
 DROP INDEX idx_audit_status ON audit_info;
 DROP INDEX idx_audit_lookup ON audit_info;
 
 -- Drop indexes from app_log_file
 DROP INDEX idx_log_fk ON app_log_file;
-DROP INDEX idx_log_hostname ON app_log_file;
+DROP INDEX idx_log_Machine_Name ON app_log_file;
 DROP INDEX idx_log_ip ON app_log_file;
 
 -- Drop indexes from f_machine_files_count_sp
@@ -89,11 +89,11 @@ DROP INDEX idx_filecount_lookup ON f_machine_files_count_sp;
 -- These indexes speed up the most common FK lookups
 -- ===================================================================
 
--- Speed up hostname lookups (eliminates subquery overhead)
+-- Speed up Machine_Name lookups (eliminates subquery overhead)
 -- Impact: 10-20x faster for FK retrieval
 -- Note: If index exists, you'll see a warning (safe to ignore)
-CREATE INDEX idx_hostname 
-ON f_machine_files_summary_count(hostname);
+CREATE INDEX idx_Machine_Name 
+ON f_machine_files_summary_count(Machine_Name);
 
 -- Speed up IP address lookups
 CREATE INDEX idx_ip_address 
@@ -147,9 +147,9 @@ ON d_file_details(file_extension, file_is_sensitive_data, file_modification_time
 CREATE INDEX idx_fk_extension 
 ON d_file_details(f_machine_files_summary_count_fk, file_extension);
 
--- Optimize hostname + path queries
-CREATE INDEX idx_hostname_path 
-ON d_file_details(hostname, file_path(200));
+-- Optimize Machine_Name + path queries
+CREATE INDEX idx_Machine_Name_path 
+ON d_file_details(Machine_Name, file_path(200));
 
 -- ===================================================================
 -- EXCEL TABLE INDEXES
@@ -189,9 +189,9 @@ ON d_shared_folders(f_machine_files_summary_count_fk);
 CREATE INDEX idx_shared_name 
 ON d_shared_folders(shared_folder_name);
 
--- Speed up hostname lookups
-CREATE INDEX idx_shared_hostname 
-ON d_shared_folders(hostname);
+-- Speed up Machine_Name lookups
+CREATE INDEX idx_shared_Machine_Name 
+ON d_shared_folders(Machine_Name);
 
 -- ===================================================================
 -- AUDIT TABLE INDEXES
@@ -228,9 +228,9 @@ ON audit_info(pc_ip_address, start_time, activity_status);
 CREATE INDEX idx_log_fk 
 ON app_log_file(f_machine_files_summary_count_fk);
 
--- Speed up hostname-based log queries
-CREATE INDEX idx_log_hostname 
-ON app_log_file(hostname);
+-- Speed up Machine_Name-based log queries
+CREATE INDEX idx_log_Machine_Name 
+ON app_log_file(Machine_Name);
 
 -- Speed up IP-based log queries
 CREATE INDEX idx_log_ip 
@@ -250,7 +250,7 @@ ON f_machine_files_count_sp(file_extension);
 
 -- Composite index for common queries
 CREATE INDEX idx_filecount_lookup 
-ON f_machine_files_count_sp(hostname, file_extension);
+ON f_machine_files_count_sp(Machine_Name, file_extension);
 
 -- ===================================================================
 -- FULL-TEXT SEARCH INDEXES (Optional - Advanced Feature)
