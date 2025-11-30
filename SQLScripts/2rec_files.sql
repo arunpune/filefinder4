@@ -28,7 +28,7 @@ CREATE TABLE `app_log_file` (
   `app_log_file_pk` int NOT NULL AUTO_INCREMENT,
   `f_machine_files_summary_count_fk` int DEFAULT NULL,
   `ip_address` varchar(50) DEFAULT NULL,
-  `hostname` varchar(100) DEFAULT NULL,
+  `Machine_Name` varchar(100) DEFAULT NULL,
   `app_log` longtext,
   `row_creation_date_time` timestamp NULL DEFAULT NULL,
   `row_created_by` varchar(255) DEFAULT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE `d_file_details` (
   `d_file_details_pk` int NOT NULL AUTO_INCREMENT,
   `f_machine_files_summary_count_fk` int DEFAULT NULL,
   `ip_address` varchar(25) DEFAULT NULL,
-  `hostname` varchar(255) DEFAULT NULL,
+  `Machine_Name` varchar(255) DEFAULT NULL,
   `file_path` varchar(760) DEFAULT NULL,
   `file_size_bytes` bigint DEFAULT NULL,
   `file_name` varchar(255) DEFAULT NULL,
@@ -114,7 +114,7 @@ DROP TABLE IF EXISTS `d_shared_folders`;
 CREATE TABLE `d_shared_folders` (
   `d_shared_folders_pk` int NOT NULL AUTO_INCREMENT,
   `f_machine_files_summary_count_fk` int DEFAULT NULL,
-  `hostname` varchar(100) DEFAULT NULL,
+  `Machine_Name` varchar(100) DEFAULT NULL,
   `ip_address` varchar(50) DEFAULT NULL,
   `os_name` varchar(100) DEFAULT NULL,
   `os_version` varchar(100) DEFAULT NULL,
@@ -169,7 +169,7 @@ DROP TABLE IF EXISTS `f_machine_files_count_sp`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `f_machine_files_count_sp` (
   `f_machine_files_count_sp_pk` int NOT NULL AUTO_INCREMENT,
-  `hostname` varchar(100) DEFAULT NULL,
+  `Machine_Name` varchar(100) DEFAULT NULL,
   `ip_address` varchar(100) DEFAULT NULL,
   `file_extension` varchar(100) DEFAULT NULL,
   `file_count` varchar(100) DEFAULT NULL,
@@ -178,7 +178,7 @@ CREATE TABLE `f_machine_files_count_sp` (
   `row_modification_date_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `row_modification_by` varchar(100) DEFAULT 'arunkumar.nair@ie.gt.com',
   PRIMARY KEY (`f_machine_files_count_sp_pk`),
-  UNIQUE KEY `hostname_file_extension` (`hostname`,`file_extension`)
+  UNIQUE KEY `hostname_file_extension` (`Machine_Name`,`file_extension`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1167 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -191,13 +191,16 @@ DROP TABLE IF EXISTS `f_machine_files_summary_count`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `f_machine_files_summary_count` (
   `f_machine_files_summary_count_pk` int NOT NULL AUTO_INCREMENT,
-  `hostname` varchar(100) DEFAULT NULL,
+  `Machine_Name` varchar(100) DEFAULT NULL,
   `ip_address` varchar(50) DEFAULT NULL,
   `os_name` varchar(100) DEFAULT NULL,
   `os_version` varchar(100) DEFAULT NULL,
   `system_info` varchar(1000) DEFAULT NULL,
   `number_of_drives` int DEFAULT NULL,
   `name_of_drives` varchar(1000) DEFAULT NULL,
+  `total_diskspace` decimal(15,2) DEFAULT NULL COMMENT 'Total disk space in GB',
+  `used_diskspace` decimal(15,2) DEFAULT NULL COMMENT 'Used disk space in GB',
+  `free_diskspace` decimal(15,2) DEFAULT NULL COMMENT 'Free disk space in GB',
   `total_n_files` int DEFAULT NULL,
   `total_n_xls` int DEFAULT NULL,
   `total_n_xlsx` int DEFAULT NULL,
@@ -224,7 +227,7 @@ CREATE TABLE `f_machine_files_summary_count` (
   `row_modification_date_time` timestamp NULL DEFAULT NULL,
   `row_modification_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`f_machine_files_summary_count_pk`),
-  UNIQUE KEY `host_key` (`hostname`)
+  UNIQUE KEY `host_key` (`Machine_Name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -329,21 +332,21 @@ CREATE TABLE `xls_file_sheet_row` (
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` PROCEDURE `GetFileCount_FileSize_Summary`()
 BEGIN
-    -- Select file details grouped by hostname
+    -- Select file details grouped by Machine_Name
     SELECT
-        hostname,
-        COUNT(hostname) as total_file_count,
+        Machine_Name,
+        COUNT(Machine_Name) as total_file_count,
         SUM(file_size_bytes) as total_file_size_in_bytes,
         ROUND(SUM(file_size_bytes) / (1024 * 1024 * 1024), 2) as file_size_in_GB
     FROM
         rec_files.d_file_details
     GROUP BY
-        hostname;
+        Machine_Name;
 
     -- Union with a row representing the grand total
     SELECT
-        'Grand Total' as hostname,
-        COUNT(hostname) as total_file_count,
+        'Grand Total' as Machine_Name,
+        COUNT(Machine_Name) as total_file_count,
         SUM(file_size_bytes) as total_file_size_in_bytes,
         ROUND(SUM(file_size_bytes) / (1024 * 1024 * 1024), 2) as file_size_in_GB
     FROM
@@ -368,7 +371,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_InsertOrUpdateFileCounts`()
 BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE ip_address_value VARCHAR(255);
-    DECLARE hostname_value VARCHAR(255);
+    DECLARE Machine_Name_value VARCHAR(255);
     DECLARE file_extension_value VARCHAR(255);
     DECLARE file_count_value INT;
     DECLARE row_created_by_value VARCHAR(255) DEFAULT 'arun';
@@ -378,14 +381,14 @@ BEGIN
     -- Declare a cursor to select data
 	DECLARE file_cursor CURSOR FOR
         SELECT 
-			hostname,
+			Machine_Name,
 			ip_address,
             file_extension,
             COUNT(*) AS file_count
         FROM 
             d_file_details
         GROUP BY 
-			hostname, 
+			Machine_Name, 
 			ip_address,
             file_extension;
 
@@ -397,17 +400,17 @@ BEGIN
 
     -- Loop through the data and insert into the table
     file_loop: LOOP
-        FETCH file_cursor INTO hostname_value, ip_address_value,file_extension_value, file_count_value;
+        FETCH file_cursor INTO Machine_Name_value, ip_address_value,file_extension_value, file_count_value;
         IF done THEN
             LEAVE file_loop;
         END IF;
 
         -- Insert into your_table_name with retrieved values, using duplication updates
         
-        INSERT INTO f_machine_files_count_sp ( hostname, ip_address, file_extension, file_count,
+        INSERT INTO f_machine_files_count_sp ( Machine_Name, ip_address, file_extension, file_count,
 					row_creation_date_time,row_created_by,row_modification_date_time,row_modification_by
         )
-		VALUES ( hostname_value, ip_address_value, file_extension_value, file_count_value,
+		VALUES ( Machine_Name_value, ip_address_value, file_extension_value, file_count_value,
 				CURRENT_TIMESTAMP(),row_created_by_value, -- Assuming a default value for row_created_by
                 CURRENT_TIMESTAMP(),row_created_by_value -- Assuming a default value for row_modification_by
         

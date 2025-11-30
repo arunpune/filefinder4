@@ -142,7 +142,7 @@ def get_or_create_machine_summary_fk(connection: Any, hostname: str, create_if_m
     try:
         cursor = connection.cursor()
         cursor.execute(
-            "SELECT f_machine_files_summary_count_pk FROM f_machine_files_summary_count WHERE hostname = %s",
+            "SELECT f_machine_files_summary_count_pk FROM f_machine_files_summary_count WHERE Machine_Name = %s",
             (hostname,)
         )
         result = cursor.fetchone()
@@ -420,6 +420,54 @@ def get_drives():
         return None
 
 
+def calculate_total_disk_space(drives_or_path):
+    """
+    Calculate total, used, and free disk space in GB for all drives or a specific path.
+    Works for both Windows and Linux systems.
+    
+    Args:
+        drives_or_path: List of drive letters (Windows) or root path string (Linux)
+        
+    Returns:
+        Tuple of (total_gb, used_gb, free_gb) as decimal values
+    """
+    total_space = 0
+    used_space = 0
+    free_space = 0
+    
+    try:
+        # Check if it's a list of drives (Windows) or a single path (Linux)
+        if isinstance(drives_or_path, list):
+            # Windows - iterate through all drives
+            for drive in drives_or_path:
+                try:
+                    usage = psutil.disk_usage(drive)
+                    total_space += usage.total
+                    used_space += usage.used
+                    free_space += usage.free
+                except Exception as e:
+                    logger.warning(f"Error getting disk space for drive {drive}: {str(e)}")
+                    continue
+        else:
+            # Linux - single root path
+            usage = psutil.disk_usage(drives_or_path)
+            total_space = usage.total
+            used_space = usage.used
+            free_space = usage.free
+        
+        # Convert bytes to GB with 2 decimal precision
+        total_gb = round(total_space / (1024 ** 3), 2)
+        used_gb = round(used_space / (1024 ** 3), 2)
+        free_gb = round(free_space / (1024 ** 3), 2)
+        
+        logger.info(f"Disk space calculated - Total: {total_gb} GB, Used: {used_gb} GB, Free: {free_gb} GB")
+        return (total_gb, used_gb, free_gb)
+        
+    except Exception as e:
+        logger.error(f"Error calculating disk space: {str(e)}", exc_info=True)
+        return (0.0, 0.0, 0.0)
+
+
 #what is this function used for
 # Define a cuhostname = socket.gethostname()  stom exception class for file-related errors
 class FileError(Exception):
@@ -615,10 +663,10 @@ def upsert_to_database(file_path, connection, employee_username, start_time):
         # Perform an upsert based on file_path
         cursor.execute('''
             INSERT INTO d_file_details (f_machine_files_summary_count_fk, 
-            ip_address,hostname,file_path, file_size_bytes, file_name, file_extension,file_owner,file_creation_time, 
+            ip_address,Machine_Name,file_path, file_size_bytes, file_name, file_extension,file_owner,file_creation_time, 
             file_modification_time, file_last_access_time,file_is_sensitive_data,row_creation_date_time, 
             row_created_by,row_modification_date_time,row_modification_by)
-            VALUES ((  SELECT f_machine_files_summary_count_pk FROM f_machine_files_summary_count WHERE hostname = %s), 
+            VALUES ((  SELECT f_machine_files_summary_count_pk FROM f_machine_files_summary_count WHERE Machine_Name = %s), 
             %s,%s,%s, %s, %s, %s,%s, %s, %s, %s,%s,FROM_UNIXTIME(%s),%s,FROM_UNIXTIME(%s),%s)
             ON DUPLICATE KEY UPDATE
             file_size_bytes = %s, row_modification_date_time = FROM_UNIXTIME(%s),row_modification_by=%s ;
@@ -932,6 +980,9 @@ def insert_f_machine_files_summary_count(connection, ipaddress, hostname, ops, o
                     
                 else:
                     drive_names += f"{i}. {drive},"
+            
+            # Calculate total disk space for all drives
+            total_diskspace, used_diskspace, free_diskspace = calculate_total_disk_space(drives)
                 
             shared_drives =""    
             shared_drives = get_shared_drives()
@@ -989,6 +1040,10 @@ def insert_f_machine_files_summary_count(connection, ipaddress, hostname, ops, o
             # For Linux, set number_of_drives and name_of_drives to NULL
             drives = None
             drive_names = None
+            
+            # Calculate total disk space for root filesystem
+            total_diskspace, used_diskspace, free_diskspace = calculate_total_disk_space("/")
+            
             total_files = count_all_files("/")
             #Do the extension count only if enable_file_ext_count_in_scan == "true"
             if enable_file_ext_count_in_scan.lower() == "true"  :  
@@ -1028,16 +1083,21 @@ def insert_f_machine_files_summary_count(connection, ipaddress, hostname, ops, o
         if drives is None:
             cursor.execute('''
                     INSERT INTO f_machine_files_summary_count (
-                    hostname, ip_address, os_name, os_version, system_info, number_of_drives, name_of_drives, 
+                    Machine_Name, ip_address, os_name, os_version, system_info, number_of_drives, name_of_drives, 
+                    total_diskspace, used_diskspace, free_diskspace,
                     total_n_files, total_n_xls, total_n_xlsx, total_n_doc, total_n_docx, total_n_pdf, total_n_zip, total_n_sql, total_n_bak,
                     total_n_csv,total_n_txt,total_n_jpg,total_n_psd,total_n_mp4,total_n_png,total_n_dll,total_n_exe,total_n_tif,total_n_avi,total_n_pst,total_n_log,
                     row_creation_date_time, row_created_by,row_modification_date_time,row_modification_by
                     )
                     VALUES (%s, %s, %s, %s, %s, NULL, NULL, 
+                    %s, %s, %s,
                     %s, %s, %s,%s,%s,%s,%s,%s,%s,
                     %s, %s, %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                     FROM_UNIXTIME(%s),%s,FROM_UNIXTIME(%s),%s
                     ) ON DUPLICATE KEY UPDATE
+                            total_diskspace=VALUES(total_diskspace),
+                            used_diskspace=VALUES(used_diskspace),
+                            free_diskspace=VALUES(free_diskspace),
                             total_n_files=VALUES(total_n_files), 
                             total_n_xls=VALUES(total_n_xls), 
                             total_n_xlsx=VALUES(total_n_xlsx), 
@@ -1062,7 +1122,8 @@ def insert_f_machine_files_summary_count(connection, ipaddress, hostname, ops, o
                             row_modification_date_time = FROM_UNIXTIME(%s),row_modification_by=%s; 
 
                 ''', (
-                hostname, ipaddress, os_name, os_version, system_info_str, 
+                hostname, ipaddress, os_name, os_version, system_info_str,
+                total_diskspace, used_diskspace, free_diskspace, 
                 total_files, total_n_xls, total_n_xlsx, total_n_doc, total_n_docx, total_n_pdf, total_n_zip, total_n_sql, total_n_bak,
                 total_n_csv,total_n_txt,total_n_jpg,total_n_psd,total_n_mp4,total_n_png,total_n_dll,total_n_exe,total_n_tif,total_n_avi,total_n_pst,total_n_log,
                 start_time, employee_username, start_time, employee_username,
@@ -1073,18 +1134,23 @@ def insert_f_machine_files_summary_count(connection, ipaddress, hostname, ops, o
         else:
             cursor.execute('''
                     INSERT INTO f_machine_files_summary_count (
-                    hostname, ip_address, os_name, os_version, system_info, number_of_drives, name_of_drives, 
+                    Machine_Name, ip_address, os_name, os_version, system_info, number_of_drives, name_of_drives, 
+                    total_diskspace, used_diskspace, free_diskspace,
                     total_n_files, total_n_xls, total_n_xlsx, total_n_doc, total_n_docx, total_n_pdf, total_n_zip, total_n_sql, total_n_bak,
                     total_n_csv,total_n_txt,total_n_jpg,total_n_psd,total_n_mp4,total_n_png,total_n_dll,total_n_exe,total_n_tif,total_n_avi,total_n_pst,total_n_log,
                     row_creation_date_time, row_created_by,row_modification_date_time,row_modification_by
                     
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 
+                    %s, %s, %s,
                     %s, %s, %s,%s,%s,%s,%s,%s,%s,
                     %s, %s, %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                     
                     FROM_UNIXTIME(%s),%s,FROM_UNIXTIME(%s),%s
                     ) ON DUPLICATE KEY UPDATE
+                            total_diskspace=VALUES(total_diskspace),
+                            used_diskspace=VALUES(used_diskspace),
+                            free_diskspace=VALUES(free_diskspace),
                             total_n_files=VALUES(total_n_files), 
                             total_n_xls=VALUES(total_n_xls), 
                             total_n_xlsx=VALUES(total_n_xlsx), 
@@ -1110,6 +1176,7 @@ def insert_f_machine_files_summary_count(connection, ipaddress, hostname, ops, o
 
                 ''', (
                 hostname, ipaddress, os_name, os_version, system_info_str,len(drives), drive_names,
+                total_diskspace, used_diskspace, free_diskspace,
                 total_files, total_n_xls, total_n_xlsx, total_n_doc, total_n_docx, total_n_pdf, total_n_zip, total_n_sql, total_n_bak,
                 total_n_csv,total_n_txt,total_n_jpg,total_n_psd,total_n_mp4,total_n_png,total_n_dll,total_n_exe,total_n_tif,total_n_avi,total_n_pst,total_n_log,
                 start_time, employee_username, start_time, employee_username,
@@ -1128,12 +1195,12 @@ def insert_f_machine_files_summary_count(connection, ipaddress, hostname, ops, o
                     #Insert into d_shared_folders
                     cursor.execute('''
                         INSERT INTO d_shared_folders (f_machine_files_summary_count_fk,
-                        hostname, ip_address, os_name, os_version, system_info, number_of_drives, name_of_drives, 
+                        Machine_Name, ip_address, os_name, os_version, system_info, number_of_drives, name_of_drives, 
                         shared_folder_name,shared_folder_path,shared_folder_description,
                         row_creation_date_time, row_created_by,row_modification_date_time,row_modification_by
                     
                         )
-                        VALUES ((SELECT f_machine_files_summary_count_pk FROM f_machine_files_summary_count WHERE hostname = %s),
+                        VALUES ((SELECT f_machine_files_summary_count_pk FROM f_machine_files_summary_count WHERE Machine_Name = %s),
                         %s, %s, %s, %s, %s, %s, %s, %s, %s,%s,
                         FROM_UNIXTIME(%s),%s,FROM_UNIXTIME(%s),%s
                         ) ON DUPLICATE KEY UPDATE
@@ -1409,7 +1476,7 @@ def insert_log_file_to_mysql(connection, log_folder, ip_address, hostname, emplo
                 INSERT INTO app_log_file (
                     f_machine_files_summary_count_fk,
                     ip_address,
-                    hostname,
+                    Machine_Name,
                     app_log,
                     row_creation_date_time,
                     row_created_by,
